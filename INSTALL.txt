@@ -1,0 +1,9 @@
+HAL Soil OCR + Gemini-outage resilience patch
+
+1) Extract this ZIP into your existing HAL-Lite project root, preserving folders and allowing overwrite of frontend/src/App.jsx and backend/app/routes/soil.py.
+2) In backend venv run: pip install -r requirements-ocr.txt
+3) Restart backend: uvicorn app.main:app --reload
+4) Restart frontend: npm run dev
+5) Open Soil advisory. Upload a clear JPG/PNG/WEBP Soil Health Card image, click Extract soil values (OCR), review/correct the extracted fields, then Generate soil advisory.
+
+The OCR endpoint is POST /api/soil/ocr and expects multipart field name 'image'. OCR is fallible; always verify values and units. During Gemini outage, soil endpoint returns a cautious input summary instead of HTTP 502.
