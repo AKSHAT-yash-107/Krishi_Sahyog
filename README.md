@@ -1,66 +1,83 @@
-# 🌾 Krishi Sahyog — AI-Powered Agricultural Decision Support Platform
+# 🌾 Krishi Sahyog
+### AI-Powered Agricultural Decision Support & Field Intelligence Platform
 
-Krishi Sahyog is an AI-assisted decision-support web app for farmers. It combines crop disease detection, soil advisory (with Soil Health Card OCR), weather advisory, satellite vegetation analysis, mandi price intelligence, and a conversational farmer assistant behind one React + FastAPI application.
+Krishi Sahyog is an AI-assisted agricultural decision-support platform that brings crop disease detection, soil health analysis, weather advisory, satellite-based vegetation monitoring, mandi price intelligence, and conversational AI into a unified application.
 
-> ⚠️ Decision support only. Outputs are not a replacement for expert agronomic advice. See [Limitations](#️-limitations).
+The objective is to help farmers interpret agricultural information and make more informed field-level decisions through an accessible web interface.
 
-## 🚀 Key Features
+---
+
+## ✨ Features
 
 ### 1. Crop Disease Detection
-- Upload a crop or leaf image for disease classification.
-- Trained MobileNetV2 model (PyTorch) returns the predicted class, confidence score, and alternative predictions.
-- Runs an image-quality check before inference.
+- Upload crop leaf images for disease classification.
+- Uses a trained PyTorch MobileNetV2 model.
+- Performs image preprocessing and quality checks.
+- Returns predicted classes, confidence scores, and alternative predictions.
 
 ### 2. Soil Health Advisory
-- Takes nitrogen, phosphorus, potassium and pH values and generates recommendations.
-- **Soil Health Card OCR:** upload a clear JPG/PNG/WEBP photo of a card, extract the values, review and correct them, then generate the advisory.
-- If the Gemini service is unavailable, the soil endpoint returns a cautious summary of your inputs instead of failing with HTTP 502.
+- Accepts soil parameters including nitrogen, phosphorus, potassium, and pH.
+- Generates soil-based recommendations.
+- Supports Soil Health Card image extraction through OCR.
+- Allows users to review extracted values before generating an advisory.
 
 ### 3. Weather Advisory
-- Weather-informed recommendations and precautions for farm operations.
+- Provides weather-informed agricultural recommendations.
+- Uses configured weather service credentials.
+- Helps users understand weather-related agricultural risks.
 
 ### 4. Satellite Vegetation Analysis
-- Takes a field boundary as GeoJSON and uses Sentinel-2 imagery.
-- Computes NDVI and EVI to assess vegetation condition across the field.
+- Accepts agricultural field boundaries in GeoJSON format.
+- Uses Sentinel-2 satellite imagery.
+- Calculates NDVI and EVI vegetation indices.
+- Supports field-level vegetation assessment.
 
 ### 5. Mandi Price Intelligence
-- Price lookup with filtering, nearest-mandi discovery, and selling-strategy suggestions.
+- Provides mandi price information and filtering.
+- Supports nearby mandi discovery.
+- Generates selling-strategy recommendations using available market information.
 
 ### 6. Intelligence Core
-- Merges soil, weather and satellite context into one field-level report.
+- Combines available agricultural context from different modules.
+- Generates consolidated field intelligence reports.
+- Integrates soil, weather, and satellite information where available.
 
 ### 7. AI Farmer Assistant
-- Chat interface that uses the available farm context to answer agricultural questions.
+- Provides a conversational interface for agricultural questions.
+- Uses configured Gemini AI integration and available farm context.
 
-## 🏗️ System Architecture
+---
+
+## 🏗️ Architecture
 
 ```text
                  FARMER
                     |
                     v
-             REACT FRONTEND (Vite)
+              REACT FRONTEND
                     |
                     v
               FASTAPI BACKEND
                     |
-       +------------+-------------+
-       |            |             |
-       v            v             v
-   Disease       Soil &         Weather
-  Detection      Advisory       Advisory
-       |            |             |
-       v            v             v
-  MobileNetV2   Soil data/OCR   Weather data
+        +-----------+-----------+
+        |           |           |
+        v           v           v
+     Disease      Soil       Weather
+    Detection   Advisory    Advisory
+        |           |           |
+        v           v           v
+    MobileNetV2   OCR       Weather API
 
-       +------------+-------------+
+        +-----------+-----------+
                     |
-          +---------+---------+
-          |                   |
-          v                   v
-    Satellite Analysis    Mandi Intelligence
-          |                   |
-          v                   v
-     Sentinel-2           Mandi database
+             +------+------+
+             |             |
+             v             v
+        Satellite        Mandi
+        Analysis       Intelligence
+             |             |
+             v             v
+         Sentinel-2    Mandi Database
 
                     |
                     v
@@ -70,156 +87,245 @@ Krishi Sahyog is an AI-assisted decision-support web app for farmers. It combine
             AI FARMER ASSISTANT
                     |
                     v
-             RESULTS & REPORTS
+             REPORTS & RESULTS
 ```
+
+---
 
 ## 🛠️ Technology Stack
 
 | Layer | Technologies |
 |---|---|
-| Frontend | React, JavaScript, CSS, Vite |
-| Backend | Python, FastAPI, Uvicorn |
+| Frontend | React, JavaScript, CSS |
+| Frontend tooling | Vite, npm |
+| Backend | Python, FastAPI |
+| API server | Uvicorn |
 | Machine Learning | PyTorch, Torchvision, MobileNetV2 |
-| Image Processing | Pillow (PIL) |
-| Generative AI | Google Gemini (advisories and assistant) |
-| Satellite Analysis | Sentinel-2, NDVI, EVI |
-| Geospatial Input | GeoJSON |
+| Image processing | Pillow |
+| OCR | RapidOCR ONNX Runtime |
+| Data processing | NumPy, Scikit-learn |
+| AI integration | Google Gemini |
+| Weather integration | OpenWeather |
+| Model ecosystem | Hugging Face |
+| Geospatial input | GeoJSON |
+| Satellite data | Sentinel-2 |
 | Database | SQLite |
-| API | REST (JSON, multipart for image uploads) |
 
-## 📂 Project Structure
+---
+
+## 📁 Project Structure
 
 ```text
 Krishi_Sahyog/
+│
 ├── backend/
 │   ├── app/
 │   │   ├── main.py
 │   │   ├── routes/
 │   │   └── services/
+│   │
 │   ├── models/
+│   ├── scripts/
 │   ├── training/
-│   └── data/
+│   │
+│   ├── .env.example
+│   ├── requirements.txt
+│   ├── requirements-ml.txt
+│   └── requirements-ocr.txt
+│
 ├── frontend/
 │   ├── src/
-│   ├── public/
-│   └── package.json
+│   ├── index.html
+│   ├── package.json
+│   ├── package-lock.json
+│   └── vite.config.js
+│
 ├── INSTALL.txt
+├── INSTALL-KRS-DISEASE-MODULE.txt
 ├── .gitignore
 └── README.md
 ```
 
-## ⚙️ Getting Started
+---
+
+## ⚙️ Installation & Setup
 
 ### Prerequisites
-- Python 3.10+
-- Node.js 18+ and npm
-- Git
-- A Google Gemini API key (for advisories and the assistant)
 
-### 1. Clone
+- Python and pip
+- Node.js and npm
+- Git
+- Required API credentials for enabled external services
+
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/AKSHAT-yash-107/Krishi_Sahyog.git
+
 cd Krishi_Sahyog
 ```
 
-### 2. Backend
+### 2. Configure the backend
 
-```bash
+```powershell
 cd backend
+
 python -m venv .venv
-```
 
-Activate the environment:
-
-```bash
-# Windows PowerShell
 .\.venv\Scripts\Activate.ps1
 
-# macOS / Linux
-source .venv/bin/activate
+python -m pip install --upgrade pip
+
+pip install -r requirements.txt
+pip install -r requirements-ml.txt
+pip install -r requirements-ocr.txt
 ```
 
-Install dependencies and start the API:
+### 3. Configure environment variables
 
-```bash
-pip install -r requirements.txt
-pip install -r requirements-ocr.txt   # needed for Soil Health Card OCR
+Create your environment file:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Add your own API credentials to `backend/.env`.
+
+Example configuration:
+
+```env
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY
+GEMINI_MODEL=gemini-2.0-flash
+
+OPENWEATHER_API_KEY=YOUR_OPENWEATHER_API_KEY
+
+HF_TOKEN=YOUR_HUGGINGFACE_TOKEN
+HF_MODEL=linkanjarad/mobilenet_v2_1.0_224-plant-disease
+```
+
+Never commit your actual `.env` file or API credentials.
+
+### 4. Start the backend
+
+From the `backend` directory:
+
+```powershell
 uvicorn app.main:app --reload
 ```
 
-The API runs at `http://127.0.0.1:8000`; interactive docs are at `http://127.0.0.1:8000/docs`.
+Backend API:
 
-### 3. Frontend
+`http://127.0.0.1:8000`
 
-In a second terminal:
+API documentation:
 
-```bash
+`http://127.0.0.1:8000/docs`
+
+Health check:
+
+`http://127.0.0.1:8000/api/health`
+
+### 5. Start the frontend
+
+Open another terminal:
+
+```powershell
 cd frontend
+
 npm install
+
 npm run dev
 ```
 
-Open the local URL Vite prints (usually `http://localhost:5173`).
+Vite starts the frontend and displays its local URL.
 
-### 4. Configuration
+---
 
-Create a `.env` file in `backend/` with your credentials:
+## 🔌 API Endpoints
 
-```env
-GEMINI_API_KEY=your_key_here
-```
-
-Place the trained disease-model checkpoint in `backend/models/` before using the disease module. Modules that depend on missing credentials or files will not work until they are provided.
-
-## 🔌 API Reference
-
-| Endpoint | Method | Purpose |
+| Endpoint | Method | Description |
 |---|---|---|
-| `/api/disease/classify` | POST | Crop disease classification (image upload) |
-| `/api/soil/advisory` | POST | Soil advisory from N, P, K, pH |
-| `/api/soil/ocr` | POST | Extract values from a Soil Health Card (multipart field `image`) |
+| `/api/health` | GET | Backend health check |
+| `/api/disease/classify` | POST | Crop disease classification |
+| `/api/soil/advisory` | POST | Soil health advisory |
+| `/api/soil/ocr` | POST | Soil card OCR |
 | `/api/weather/advisory` | POST | Weather advisory |
-| `/api/satellite/analyze` | POST | NDVI/EVI analysis for a GeoJSON field |
-| `/api/mandi/prices` | GET | Mandi prices |
-| `/api/mandi/nearest` | GET | Nearby mandis |
-| `/api/mandi/selling-strategy` | POST | Selling strategy |
-| `/api/intelligence/analyze` | POST | Consolidated field report |
+| `/api/satellite/analyze` | POST | Satellite vegetation analysis |
 | `/api/assistant/ask` | POST | AI farmer assistant |
+| `/api/mandi/filters` | GET | Mandi filters |
+| `/api/mandi/nearest` | GET | Nearby mandi discovery |
+| `/api/mandi/prices` | GET | Mandi price information |
+| `/api/mandi/selling-strategy` | POST | Selling strategy |
+| `/api/intelligence/analyze` | POST | Consolidated field intelligence |
 
-## 🧠 Machine Learning
+---
 
-Disease detection uses a MobileNetV2 trained with PyTorch. Inference steps:
+## 🧠 Machine Learning Workflow
 
-1. Load the image and convert to RGB.
-2. Assess image quality.
-3. Resize and normalize.
-4. Run the model.
-5. Apply softmax for class scores.
-6. Return top predictions and alternatives.
+The current disease classification service uses a trained MobileNetV2 architecture implemented using PyTorch.
+
+The inference pipeline consists of:
+
+1. Image upload and RGB conversion.
+2. Image quality assessment.
+3. Image resizing and normalization.
+4. MobileNetV2 inference.
+5. Softmax-based class scoring.
+6. Top predictions and alternative class results.
+
+The model is intended to assist agricultural assessment, not replace professional diagnosis.
+
+---
+
+## 🛰️ Satellite Vegetation Indices
+
+Krishi Sahyog uses vegetation indices to assess vegetation conditions.
+
+**Normalized Difference Vegetation Index (NDVI)**
+
+NDVI = (NIR - Red) / (NIR + Red)
+
+**Enhanced Vegetation Index (EVI)**
+
+EVI = 2.5 × (NIR - Red) / (NIR + 6 × Red - 7.5 × Blue + 1)
+
+These indicators help interpret vegetation conditions. They should not be treated as definitive crop disease diagnoses.
+
+---
 
 ## ⚠️ Limitations
 
-- Accuracy on controlled datasets may not carry over to real field photos.
-- NDVI/EVI describe vegetation condition; they are not disease diagnoses.
-- OCR is fallible. Always check extracted soil values and units before generating advice.
-- Recommendations depend on input quality; mandi insights depend on data freshness and coverage.
-- AI-generated advice should be validated before important agricultural decisions.
+- Disease classification results depend on image quality and model training data.
+- Real-world field performance may differ from controlled dataset performance.
+- OCR extraction can be inaccurate; extracted soil values and units must be verified.
+- Satellite vegetation indices provide indirect vegetation observations.
+- Weather and AI services depend on external API availability and configuration.
+- Mandi recommendations depend on the quality and freshness of available market data.
+- AI-generated recommendations should be independently validated before important agricultural decisions.
+
+---
 
 ## 🔮 Future Improvements
 
-- Disease datasets captured in real field conditions
-- More robust geospatial analysis
-- Expanded agricultural knowledge base
-- Regional-language support
-- Historical crop-health monitoring
-- Broader market intelligence
-- Evaluating recommendation accuracy with real-world feedback
+- Improved crop disease datasets and model evaluation.
+- More robust geospatial analytics.
+- Regional-language support.
+- Historical vegetation monitoring.
+- Expanded agricultural knowledge retrieval.
+- Better market intelligence and price forecasting.
+- Field validation and farmer feedback integration.
+
+---
 
 ## 👨‍💻 Author
 
-**Akshat Shrivastav** — B.Tech, Computer Science and Engineering
+**Akshat Shrivastav**
+
+B.Tech — Computer Science and Engineering
+
 GitHub: [AKSHAT-yash-107](https://github.com/AKSHAT-yash-107)
+
+**Repository:** [Krishi Sahyog](https://github.com/AKSHAT-yash-107/Krishi_Sahyog)
 
 ---
 
