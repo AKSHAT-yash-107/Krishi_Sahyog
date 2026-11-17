@@ -3,7 +3,7 @@ import {Sprout, LayoutDashboard, Leaf, FlaskConical, CloudSun, MessageCircle, Me
 import AdvisoryText from './components/AdvisoryText';
 import MarkdownReport from './components/MarkdownReport';
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const nav = [{id:'overview',label:'Overview',icon:LayoutDashboard},{id:'disease',label:'Disease detection',icon:Leaf},{id:'soil',label:'Soil advisory',icon:FlaskConical},{id:'weather',label:'Weather advisory',icon:CloudSun},{id:'satellite',label:'Satellite imagery',icon:Satellite},{id:'mandi',label:'Mandi & selling strategy',icon:Sprout},{id:'intelligence',label:'Krishi Sahyog Intelligence',icon:BrainCircuit},{id:'assistant',label:'Farmer assistant',icon:MessageCircle}];
+const nav = [{id:'overview',label:'Overview',icon:LayoutDashboard},{id:'disease',label:'Disease detection',icon:Leaf},{id:'soil',label:'Soil advisory',icon:FlaskConical},{id:'weather',label:'Weather advisory',icon:CloudSun},{id:'satellite',label:'Satellite imagery',icon:Satellite},{id:'mandi',label:'Mandi & selling strategy',icon:Sprout},{id:'intelligence',label:'  Krishi sahyog Intelligence Core',icon:BrainCircuit},{id:'assistant',label:'Farmer assistant',icon:MessageCircle}];
 
 function App(){
  const [page,setPage]=useState('overview'),[mobile,setMobile]=useState(false);
@@ -88,21 +88,113 @@ function App(){
 };
  const runSoilOCR=async()=>{if(!soilCardFile){setError('Choose a Soil Health Card image first.');return;}setOcrBusy(true);setError('');setOcrResult(null);try{const fd=new FormData();fd.append('image',soilCardFile);const r=await fetch(API+'/api/soil/ocr',{method:'POST',body:fd});const d=await r.json();if(!r.ok)throw new Error(d.detail||'OCR failed');setOcrResult(d);const v=d.extracted_values||{};setSoil(s=>({...s,nitrogen:v.nitrogen!=null?String(v.nitrogen):s.nitrogen,phosphorus:v.phosphorus!=null?String(v.phosphorus):s.phosphorus,potassium:v.potassium!=null?String(v.potassium):s.potassium,ph:v.ph!=null?String(v.ph):s.ph}));}catch(e){setError(e.message);}finally{setOcrBusy(false);}};
  const runWeather=()=>request('/api/weather/advisory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({city:location,crop,growth_stage:growth})});
- const runSatellite=()=>{
-  let polygon=null;
-  if(polygonText.trim()){
-   try{polygon=JSON.parse(polygonText);}
-   catch(e){setError('Field boundary is not valid JSON. Paste a valid GeoJSON Polygon.');return;}
-   if(!['Polygon','MultiPolygon'].includes(polygon?.type)){setError('GeoJSON must have type Polygon or MultiPolygon.');return;}
+
+const runSatellite = () => {
+
+let polygon = null;
+
+if (polygonText.trim()) {
+  try {
+    const parsed = JSON.parse(polygonText);
+
+    // Handle GeoJSON FeatureCollection
+    if (parsed.type === 'FeatureCollection') {
+      if (!Array.isArray(parsed.features) || parsed.features.length !== 1) {
+        throw new Error(
+          'Please provide a FeatureCollection containing exactly one feature.'
+        );
+      }
+
+      polygon = parsed.features[0]?.geometry;
+    }
+
+    // Handle GeoJSON Feature
+    else if (parsed.type === 'Feature') {
+      polygon = parsed.geometry;
+    }
+
+    // Handle direct Polygon / MultiPolygon
+    else {
+      polygon = parsed;
+    }
+
+    if (!['Polygon', 'MultiPolygon'].includes(polygon?.type)) {
+      throw new Error('Geometry must be Polygon or MultiPolygon.');
+    }
+
+    // Validate coordinates and closed rings
+    const rings = polygon.type === 'Polygon'
+      ? polygon.coordinates
+      : polygon.coordinates.flat();
+
+    if (!Array.isArray(rings) || rings.length === 0) {
+      throw new Error('Polygon coordinates are missing.');
+    }
+
+    for (const ring of rings) {
+      if (!Array.isArray(ring) || ring.length < 4) {
+        throw new Error('Each polygon ring needs at least 4 positions.');
+      }
+
+      const first = ring[0];
+      const last = ring[ring.length - 1];
+
+      if (
+        first[0] !== last[0] ||
+        first[1] !== last[1]
+      ) {
+        throw new Error('Polygon ring must be closed.');
+      }
+
+      for (const position of ring) {
+        if (
+          !Array.isArray(position) ||
+          position.length < 2 ||
+          !Number.isFinite(position[0]) ||
+          !Number.isFinite(position[1]) ||
+          position[0] < -180 ||
+          position[0] > 180 ||
+          position[1] < -90 ||
+          position[1] > 90
+        ) {
+          throw new Error('Invalid longitude/latitude coordinates.');
+        }
+      }
+    }
+
+  } catch (e) {
+    setError(e.message || 'Invalid GeoJSON.');
+    return;
   }
-  request('/api/satellite/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-   latitude:Number(satelliteInput.latitude),longitude:Number(satelliteInput.longitude),
-   radius_m:Number(satelliteInput.radius_m),start_date:satelliteInput.start_date,
-   end_date:satelliteInput.end_date,max_cloud:Number(satelliteInput.max_cloud),
-   polygon_geojson:polygon,crop,growth_stage:growth
-  })});
- };
- const ask=async(e)=>{e.preventDefault();if(!question.trim())return;const q=question;setQuestion('');setHistory(h=>[...h,{role:'user',text:q}]);setBusy(true);setError('');try{const r=await fetch(API+'/api/assistant/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,crop,location,soil_context:`N ${soil.nitrogen}, P ${soil.phosphorus}, K ${soil.potassium}, pH ${soil.ph}`,weather_context:'Not fetched yet'})});const d=await r.json();if(!r.ok)throw new Error(d.detail||'Request failed');setHistory(h=>[...h,{role:'user',text:q},{role:'assistant',text:d.answer}]);}catch(err){setError(err.message);}finally{setBusy(false);}};
+}
+
+
+  request('/api/satellite/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      latitude: Number(satelliteInput.latitude),
+      longitude: Number(satelliteInput.longitude),
+      radius_m: Number(satelliteInput.radius_m),
+      start_date: satelliteInput.start_date,
+      end_date: satelliteInput.end_date,
+      max_cloud: Number(satelliteInput.max_cloud),
+      polygon_geojson: polygon,
+      crop,
+      growth_stage: growth
+    })
+  });
+};
+
+ const ask=async(e)=>{e.preventDefault();if(!question.trim())return;const q=question;setQuestion('');setHistory(h=>[...h,{role:'user',text:q}]);setBusy(true);setError('');try{const r=await fetch(API+'/api/assistant/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,crop,location,soil_context: [
+  ['Nitrogen', soil.nitrogen],
+  ['Phosphorus', soil.phosphorus],
+  ['Potassium', soil.potassium],
+  ['pH', soil.ph]
+]
+  .filter(([, value]) => value !== '' && value != null)
+  .map(([label, value]) => `${label}: ${value}`)
+  .join(', ') || 'No soil measurements provided',weather_context:'Not fetched yet'})});const d=await r.json();if(!r.ok)throw new Error(d.detail||'Request failed');setHistory(h=>[...h,{role:'user',text:q},{role:'assistant',text:d.answer}]);}catch(err){setError(err.message);}finally{setBusy(false);}};
 
   async function loadMandiMarkets(){
     setMandiLoading(true);setMandiError('');setMandiResult(null);setNearestInfo(null);
@@ -176,7 +268,7 @@ function App(){
         end_date:intelligenceForm.end_date,max_cloud:Number(intelligenceForm.max_cloud)
       };
       const r=await fetch(`${API}/api/intelligence/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-      const d=await r.json();if(!r.ok)throw new Error(d.detail||'Krishi Sahyog analysis failed');setIntelligenceResult(d);
+      const d=await r.json();if(!r.ok)throw new Error(d.detail||'Intelligence analysis failed');setIntelligenceResult(d);
     }catch(e){setIntelligenceError(e.message);}finally{setIntelligenceBusy(false);}
   }
 
@@ -184,7 +276,7 @@ function App(){
  return <div className="app">
   <aside className={`sidebar ${mobile?'show':''}`}><div className="brand"><div className="brandmark"><Sprout size={23}/></div><div><b>KRISHI<span>SAHYOG</span></b><small>HARVEST INTELLIGENCE</small></div></div>
    <nav>{nav.map(n=><button key={n.id} className={page===n.id?'active':''} onClick={()=>{setPage(n.id);setMobile(false);reset();}}><n.icon size={18}/>{n.label}{page===n.id&&<span className="nav-dot"/>}</button>)}</nav>
-   
+
   </aside>
   <main className="main"><header className="topbar"><button className="mobile-menu" onClick={()=>setMobile(!mobile)}><Menu/></button></header>
    <div className="content">
@@ -198,36 +290,110 @@ function App(){
    {page==='overview'&&<><div className="hero"><div className="hero-copy"><div className="hero-tag"><span/> YOUR FARM, BETTER INFORMED</div><h2>Make every field<br/>decision <em>count.</em></h2><p>Understand crop health, soil conditions and weather risks with AI-assisted agricultural guidance.</p><button onClick={()=>setPage('assistant')}>Ask the farmer assistant <ArrowUpRight size={17}/></button></div><div className="hero-art"><div className="sun-disc"/><div className="hill hill-back"/><div className="hill hill-front"/><div className="plant plant-one">♣</div><div className="plant plant-two">♣</div><div className="hero-stat"><span className="stat-icon"><Sprout size={17}/></span><div><b>Field-aware insights</b><small>Built around your crop context</small></div><CheckCircle2 size={17}/></div></div></div>
     <div className="section-row"><div><h3>Your advisory tools</h3><p>Choose a service to get started</p></div></div><div className="service-grid">{[{id:'disease',icon:Leaf,n:'Crop disease detection',d:'Upload a leaf photo to screen for possible disease.',tag:'IMAGE AI',color:'mint'},{id:'soil',icon:FlaskConical,n:'Soil health advisory',d:'Understand NPK and pH readings for your crop.',tag:'SOIL INSIGHTS',color:'sand'},{id:'weather',icon:CloudSun,n:'Weather advisory',d:'Review local weather and crop-specific precautions.',tag:'WEATHER',color:'blue'},{id:'satellite',icon:Satellite,n:'Satellite vegetation analysis',d:'Explore Sentinel-2 imagery with NDVI and EVI indices.',tag:'SENTINEL-2',color:'mint'},{id:'mandi',icon:Sprout,n:'Mandi prices & selling strategy',d:'Find nearby markets, inspect reported prices and compare estimated net realization.',tag:'LOCAL MARKET DATA',color:'sand'},{id:'intelligence',icon:BrainCircuit,n:'Krishi Sahyog Intelligence Core',d:'Combine verified soil, current weather and optional satellite observations into one field report.',tag:'FIELD INTELLIGENCE',color:'lav'},{id:'assistant',icon:MessageCircle,n:'AI farmer assistant',d:'Ask questions with your farm context included.',tag:'AI ASSISTANT',color:'lav'}].map(x=><button className="service-card" onClick={()=>{setPage(x.id);reset()}}><div className={`service-icon ${x.color}`}><x.icon size={21}/></div><span className="service-tag">{x.tag}</span><h4>{x.n}</h4><p>{x.d}</p><div className="card-link">Open tool <ArrowUpRight size={15}/></div></button>)}</div>
     <div className="note-strip"><div><CheckCircle2 size={18}/></div><p><b>Use local expertise for important decisions.</b> Krishi Sahyog provides preliminary AI-assisted information. Confirm disease treatment and fertilizer decisions with your local agriculture officer or KVK.</p></div></>}
-   {page==='disease'&&<div className="work-grid"><div className="panel"><div className="panel-head"><div><span className="mini-label">IMAGE-BASED SCREENING</span><h3>Check a crop leaf</h3><p>Use a clear, close-up image with good lighting.</p></div><div className="round-icon mint"><Leaf/></div></div>{filePreview ? (
-      <div className="leaf-preview">
-       <img src={filePreview} alt="Selected crop leaf preview"/>
-       <div className="leaf-preview-info">
-        <b>{file?.name}</b>
-        <span>{file?(file.size/1024/1024).toFixed(2)+' MB':''}</span>
-        <label className="leaf-change-btn">Change image
-         <input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>{
-          const selected=e.target.files?.[0];
-          if(!selected)return;
-          if(selected.size>8*1024*1024){setError('Image must be smaller than 8 MB.');e.target.value='';return;}
-          setError('');setFile(selected);
-         }}/>
-        </label>
-        <button type="button" onClick={()=>setFile(null)}>Remove image</button>
+   {page === 'disease' && (
+     <div className="work-grid">
+       <div className="panel">
+         <div className="panel-head">
+           <div>
+             <span className="mini-label">IMAGE-BASED SCREENING</span>
+             <h3>Check a crop leaf</h3>
+             <p>Use a clear, close-up image with good lighting.</p>
+           </div>
+           <div className="round-icon mint">
+             <Leaf />
+           </div>
+         </div>
+
+         {filePreview ? (
+           <div className="leaf-preview">
+             <img src={filePreview} alt="Selected crop leaf preview" />
+
+             <div className="leaf-preview-info">
+               <b>{file?.name}</b>
+               <span>
+                 {file ? (file.size / 1024 / 1024).toFixed(2) + ' MB' : ''}
+               </span>
+
+               <label className="leaf-change-btn">
+                 Change image
+                 <input
+                   type="file"
+                   accept="image/png,image/jpeg,image/webp"
+                   onChange={e => {
+                     const selected = e.target.files?.[0];
+                     if (!selected) return;
+
+                     if (selected.size > 8 * 1024 * 1024) {
+                       setError('Image must be smaller than 8 MB.');
+                       e.target.value = '';
+                       return;
+                     }
+
+                     setError('');
+                     setFile(selected);
+                   }}
+                 />
+               </label>
+
+               <button type="button" onClick={() => setFile(null)}>
+                 Remove image
+               </button>
+             </div>
+           </div>
+         ) : (
+           <label className="upload-zone">
+             <input
+               type="file"
+               accept="image/png,image/jpeg,image/webp"
+               onChange={e => {
+                 const selected = e.target.files?.[0];
+                 if (!selected) return;
+
+                 if (selected.size > 8 * 1024 * 1024) {
+                   setError('Image must be smaller than 8 MB.');
+                   e.target.value = '';
+                   return;
+                 }
+
+                 setError('');
+                 setFile(selected);
+               }}
+             />
+
+             <div className="upload-icon">
+               <Upload />
+             </div>
+             <b>Drop a leaf image here</b>
+             <span>or click to browse · JPG, PNG, WEBP · max 8 MB</span>
+           </label>
+         )}
+
+         <button
+           className="primary-btn"
+           disabled={busy}
+           onClick={runDisease}
+         >
+           {busy ? (
+             <LoaderCircle className="spin" />
+           ) : (
+             <Leaf size={17} />
+           )}
+           Analyse leaf image
+         </button>
+
+         <p className="fineprint">
+           A model prediction is not a confirmed diagnosis. Image quality
+           and supported disease classes affect results.
+         </p>
        </div>
-      </div>
-     ) : (
-      <label className="upload-zone">
-       <input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>{
-        const selected=e.target.files?.[0];
-        if(!selected)return;
-        if(selected.size>8*1024*1024){setError('Image must be smaller than 8 MB.');e.target.value='';return;}
-        setError('');setFile(selected);
-       }}/>
-       <div className="upload-icon"><Upload/></div>
-       <b>Drop a leaf image here</b>
-       <span>or click to browse · JPG, PNG, WEBP · max 8 MB</span>
-      </label>
-     )}<button className="primary-btn" disabled={busy} onClick={runDisease}>{busy?<LoaderCircle className="spin"/>:<Leaf size={17}/>} Analyse leaf image</button><p className="fineprint">A model prediction is not a confirmed diagnosis. Image quality and supported disease classes affect results.</p></div><Result result={result} type="disease"/></div>}
+
+       {/* Existing prediction result */}
+       <Result result={result} type="disease" />
+
+       {/* Expandable model information */}
+
+     </div>
+   )}
    {page==='soil'&&<div className="work-grid"><div className="panel">
     <div className="panel-head"><div><span className="mini-label">SOIL HEALTH ASSESSMENT</span><h3>Tell us about your soil</h3><p>You can continue even if you don't have a Soil Health Card or laboratory report.</p></div><div className="round-icon sand"><FlaskConical/></div></div>
     <div className="soil-mode-grid" style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:9,margin:'18px 0'}}>
@@ -299,24 +465,24 @@ function App(){
     <div className="panel intelligence-form">
      <div className="panel-head"><div><span className="mini-label">FIELD ASSESSMENT</span><h3>Build your field intelligence report</h3><p>Combine crop context, verified soil readings and available field observations.</p></div><div className="round-icon mint"><BrainCircuit/></div></div>
      <div className="location-field">
-      <label htmlFor="ks-location">Farm location</label>
-      <div className="location-input-wrap"><MapPin size={18}/><input id="ks-location" type="text" value={location} placeholder="Search village, town or district" autoComplete="off" onChange={e=>{setLocation(e.target.value);setLocationConfirmed(false);setLocationSuggestions([]);setIntelligenceResult(null);}}/>{locationSearching&&<LoaderCircle className="spin" size={17}/>}</div>
+      <label htmlFor="location">Farm location</label>
+      <div className="location-input-wrap"><MapPin size={18}/><input id="location" type="text" value={location} placeholder="Search village, town or district" autoComplete="off" onChange={e=>{setLocation(e.target.value);setLocationConfirmed(false);setLocationSuggestions([]);setIntelligenceResult(null);}}/>{locationSearching&&<LoaderCircle className="spin" size={17}/>}</div>
       {locationSuggestions.length>0&&<div className="location-suggestions">{locationSuggestions.map((place,i)=>{const p=place.properties||{};const coords=place.geometry?.coordinates||[];const label=[p.name,p.city||p.district,p.state,p.country].filter(Boolean).filter((v,j,a)=>a.indexOf(v)===j).join(', ');return <button type="button" key={`${label}-${i}`} onClick={()=>{setLocation(label);setLocationConfirmed(true);setLocationSuggestions([]);if(coords.length>=2)setIntelligenceForm(old=>({...old,latitude:String(coords[1]),longitude:String(coords[0])}));}}><MapPin size={16}/><span>{label}</span></button>;})}</div>}
       <small>{locationConfirmed?'Location selected. Verify the field coordinates before satellite analysis.':'Choose a suggested place to confirm the location.'}</small>
      </div>
      <div className="form-grid intelligence-context-grid">
-      <label htmlFor="ks-crop">Primary crop<select id="ks-crop" value={crop} onChange={e=>setCrop(e.target.value)}>{['Wheat','Rice','Soybean','Maize','Cotton','Chickpea','Tomato','Potato'].map(x=><option key={x}>{x}</option>)}</select></label>
-      <label htmlFor="ks-growth">Growth stage<select id="ks-growth" value={growth} onChange={e=>setGrowth(e.target.value)}>{['Not specified','Sowing','Germination','Seedling','Vegetative','Flowering','Fruiting','Maturity','Harvest'].map(x=><option key={x}>{x}</option>)}</select></label>
+      <label htmlFor="crop">Primary crop<select id="crop" value={crop} onChange={e=>setCrop(e.target.value)}>{['Wheat','Rice','Soybean','Maize','Cotton','Chickpea','Tomato','Potato'].map(x=><option key={x}>{x}</option>)}</select></label>
+      <label htmlFor="growth">Growth stage<select id="growth" value={growth} onChange={e=>setGrowth(e.target.value)}>{['Not specified','Sowing','Germination','Seedling','Vegetative','Flowering','Fruiting','Maturity','Harvest'].map(x=><option key={x}>{x}</option>)}</select></label>
      </div>
      <div className="section-divider"><span>SOIL INFORMATION</span><small>Enter values from a verified soil report</small></div>
      <div className="form-grid intelligence-context-grid">
-      <label htmlFor="ks-soil">Soil type<select id="ks-soil" value={intelligenceForm.soil_type} onChange={e=>setIntelligenceForm({...intelligenceForm,soil_type:e.target.value})}>{['Not specified','Sandy','Sandy loam','Loamy','Clay loam','Clay'].map(x=><option key={x}>{x}</option>)}</select></label>
-      <label htmlFor="ks-ph">Soil pH<input id="ks-ph" type="number" min="0" max="14" step="0.1" inputMode="decimal" placeholder="0–14" value={intelligenceForm.ph} onChange={e=>setIntelligenceForm({...intelligenceForm,ph:e.target.value})}/></label>
+      <label htmlFor="soil">Soil type<select id="soil" value={intelligenceForm.soil_type} onChange={e=>setIntelligenceForm({...intelligenceForm,soil_type:e.target.value})}>{['Not specified','Sandy','Sandy loam','Loamy','Clay loam','Clay'].map(x=><option key={x}>{x}</option>)}</select></label>
+      <label htmlFor="ph">Soil pH<input id="ph" type="number" min="0" max="14" step="0.1" inputMode="decimal" placeholder="0–14" value={intelligenceForm.ph} onChange={e=>setIntelligenceForm({...intelligenceForm,ph:e.target.value})}/></label>
      </div>
      <div className="npk-grid">
-      <label htmlFor="ks-n">Nitrogen<input id="ks-n" type="number" min="0" step="any" inputMode="decimal" placeholder="Optional" value={intelligenceForm.nitrogen} onChange={e=>setIntelligenceForm({...intelligenceForm,nitrogen:e.target.value})}/></label>
-      <label htmlFor="ks-p">Phosphorus<input id="ks-p" type="number" min="0" step="any" inputMode="decimal" placeholder="Optional" value={intelligenceForm.phosphorus} onChange={e=>setIntelligenceForm({...intelligenceForm,phosphorus:e.target.value})}/></label>
-      <label htmlFor="ks-k">Potassium<input id="ks-k" type="number" min="0" step="any" inputMode="decimal" placeholder="Optional" value={intelligenceForm.potassium} onChange={e=>setIntelligenceForm({...intelligenceForm,potassium:e.target.value})}/></label>
+      <label htmlFor="n">Nitrogen<input id="n" type="number" min="0" step="any" inputMode="decimal" placeholder="Optional" value={intelligenceForm.nitrogen} onChange={e=>setIntelligenceForm({...intelligenceForm,nitrogen:e.target.value})}/></label>
+      <label htmlFor="p">Phosphorus<input id="p" type="number" min="0" step="any" inputMode="decimal" placeholder="Optional" value={intelligenceForm.phosphorus} onChange={e=>setIntelligenceForm({...intelligenceForm,phosphorus:e.target.value})}/></label>
+      <label htmlFor="k">Potassium<input id="k" type="number" min="0" step="any" inputMode="decimal" placeholder="Optional" value={intelligenceForm.potassium} onChange={e=>setIntelligenceForm({...intelligenceForm,potassium:e.target.value})}/></label>
      </div>
      <p className="fineprint readable-note">Enter NPK values only when their units and reporting method are known. Do not mix kg/ha, ppm or qualitative ratings. The current API does not interpret NPK units.</p>
      <div className="section-divider"><span>ADDITIONAL FIELD EVIDENCE</span><small>Optional analysis modules</small></div>
@@ -325,30 +491,33 @@ function App(){
       <label className="option-row"><input type="checkbox" checked={intelligenceForm.fetch_satellite} disabled={!locationConfirmed} onChange={e=>setIntelligenceForm({...intelligenceForm,fetch_satellite:e.target.checked})}/><span><b>Satellite NDVI / EVI</b><small>Analyse vegetation indices around your field coordinates.</small></span></label>
      </div>
      {intelligenceForm.fetch_satellite&&<div className="satellite-location-box"><b>Field analysis area</b><p>Village coordinates may not represent your actual farm. Verify them before analysis.</p><div className="form-grid">
-      <label htmlFor="ks-lat">Latitude<input id="ks-lat" type="number" step="any" value={intelligenceForm.latitude} onChange={e=>setIntelligenceForm({...intelligenceForm,latitude:e.target.value})}/></label>
-      <label htmlFor="ks-lon">Longitude<input id="ks-lon" type="number" step="any" value={intelligenceForm.longitude} onChange={e=>setIntelligenceForm({...intelligenceForm,longitude:e.target.value})}/></label>
-      <label htmlFor="ks-radius">Radius (metres)<input id="ks-radius" type="number" min="100" max="5000" value={intelligenceForm.radius_m} onChange={e=>setIntelligenceForm({...intelligenceForm,radius_m:e.target.value})}/></label>
-      <label htmlFor="ks-cloud">Maximum cloud (%)<input id="ks-cloud" type="number" min="0" max="100" value={intelligenceForm.max_cloud} onChange={e=>setIntelligenceForm({...intelligenceForm,max_cloud:e.target.value})}/></label>
-      <label htmlFor="ks-start">Start date<input id="ks-start" type="date" value={intelligenceForm.start_date} onChange={e=>setIntelligenceForm({...intelligenceForm,start_date:e.target.value})}/></label>
-      <label htmlFor="ks-end">End date<input id="ks-end" type="date" value={intelligenceForm.end_date} onChange={e=>setIntelligenceForm({...intelligenceForm,end_date:e.target.value})}/></label>
+      <label htmlFor="lat">Latitude<input id="lat" type="number" step="any" value={intelligenceForm.latitude} onChange={e=>setIntelligenceForm({...intelligenceForm,latitude:e.target.value})}/></label>
+      <label htmlFor="lon">Longitude<input id="lon" type="number" step="any" value={intelligenceForm.longitude} onChange={e=>setIntelligenceForm({...intelligenceForm,longitude:e.target.value})}/></label>
+      <label htmlFor="radius">Radius (metres)<input id="radius" type="number" min="100" max="5000" value={intelligenceForm.radius_m} onChange={e=>setIntelligenceForm({...intelligenceForm,radius_m:e.target.value})}/></label>
+      <label htmlFor="cloud">Maximum cloud (%)<input id="cloud" type="number" min="0" max="100" value={intelligenceForm.max_cloud} onChange={e=>setIntelligenceForm({...intelligenceForm,max_cloud:e.target.value})}/></label>
+      <label htmlFor="start">Start date<input id="start" type="date" value={intelligenceForm.start_date} onChange={e=>setIntelligenceForm({...intelligenceForm,start_date:e.target.value})}/></label>
+      <label htmlFor="end">End date<input id="end" type="date" value={intelligenceForm.end_date} onChange={e=>setIntelligenceForm({...intelligenceForm,end_date:e.target.value})}/></label>
      </div><p className="fineprint readable-note">This uses a circular area around the coordinates, not an exact farm boundary. Use the Satellite Imagery page for a polygon.</p></div>}
      <div className="evidence-summary"><span>Evidence selected</span><div className="evidence-chips">
       <span className={['nitrogen','phosphorus','potassium','ph'].some(k=>intelligenceForm[k]!=='')?'available':''}>Soil {['nitrogen','phosphorus','potassium','ph'].some(k=>intelligenceForm[k]!=='')?'✓':'—'}</span>
       <span className={intelligenceForm.fetch_weather?'available':''}>Weather {intelligenceForm.fetch_weather?'✓':'—'}</span>
       <span className={intelligenceForm.fetch_satellite?'available':''}>Satellite {intelligenceForm.fetch_satellite?'✓':'—'}</span>
      </div></div>
-     <button className="primary-btn" disabled={intelligenceBusy||!locationConfirmed||!(intelligenceForm.fetch_weather||intelligenceForm.fetch_satellite||['nitrogen','phosphorus','potassium','ph'].some(k=>intelligenceForm[k]!==''))} onClick={runIntelligence}>{intelligenceBusy?<><LoaderCircle className="spin"/> Analysing field evidence…</>:<><BrainCircuit size={17}/> Run Krishi Sahyog Intelligence Analysis</>}</button>
+     <button className="primary-btn" disabled={intelligenceBusy||!locationConfirmed||!(intelligenceForm.fetch_weather||intelligenceForm.fetch_satellite||['nitrogen','phosphorus','potassium','ph'].some(k=>intelligenceForm[k]!==''))} onClick={runIntelligence}>{intelligenceBusy?<><LoaderCircle className="spin"/> Analysing field evidence…</>:<><BrainCircuit size={17}/> Run Krishi Intelligence Analysis</>}</button>
      {!locationConfirmed&&<p className="form-hint">Select a farm location before running the analysis.</p>}
      {intelligenceError&&<div className="alert error" style={{marginTop:12}}><AlertCircle size={17}/>{intelligenceError}</div>}
      <p className="fineprint readable-note">Krishi Sahyog uses supplied measurements and retrieved observations. Missing data is not inferred. This report does not prescribe fertilizer doses or replace local agronomic advice.</p>
     </div>
     <div className="result-panel intelligence-output">
-     <span className="mini-label">FIELD INTELLIGENCE OUTPUT</span><h3>Krishi Sahyog field analysis</h3>
+     <span className="mini-label">FIELD INTELLIGENCE OUTPUT</span><h3>Krishi Sahyog analysis report</h3>
      {intelligenceBusy?<div className="analysis-loading"><LoaderCircle className="spin" size={28}/><h4>Analysing your field</h4><p>Retrieving available evidence and preparing the report.</p><div className="loading-line"/><div className="loading-line"/><div className="loading-line short"/></div>:!intelligenceResult?<div className="intelligence-empty"><div className="empty-art"><BrainCircuit size={30}/></div><h3>Your field report will appear here</h3><p>Krishi Sahyog combines the evidence you provide into a structured agricultural intelligence report.</p><div className="report-preview"><div><CheckCircle2 size={16}/> Field overview</div><div><CheckCircle2 size={16}/> Soil observations</div><div><CheckCircle2 size={16}/> Weather observations</div><div><CheckCircle2 size={16}/> Satellite observations</div><div><CheckCircle2 size={16}/> Risks and next checks</div></div><p className="fineprint">Sections appear only when corresponding evidence is available.</p></div>:<>
       <div className="condition">{intelligenceResult.crop} · {intelligenceResult.location} · {intelligenceResult.growth_stage} · AI: {intelligenceResult.ai_status}</div>
       <div className="evidence-summary"><span>Sources returned</span><div className="evidence-chips"><span className={intelligenceResult.weather?'available':''}>Weather {intelligenceResult.weather?'✓':'—'}</span><span className={intelligenceResult.satellite?'available':''}>Satellite {intelligenceResult.satellite?'✓':'—'}</span><span className="available">Submitted soil inputs ✓</span></div></div>
       {intelligenceResult.module_errors?.length>0&&<div className="partial-warning"><AlertCircle size={17}/><div><b>Some sources were unavailable</b>{intelligenceResult.module_errors.map((x,i)=><p key={i}>{x.module}: {x.error}</p>)}<small>The report was generated using remaining available evidence.</small></div></div>}
-      <div className="report-section"><h4>Field intelligence findings</h4><MarkdownReport text={intelligenceResult.intelligence_report} /></div>
+      <div className="report-section">
+  <h4>Field intelligence findings</h4>
+  <MarkdownReport text={intelligenceResult.intelligence_report} />
+</div>
       {intelligenceResult.rule_engine&&<div className="report-section"><h4>Deterministic observations</h4>{intelligenceResult.rule_engine.observations?.length?intelligenceResult.rule_engine.observations.map((x,i)=><div className="alt-list" key={i}><div>{x}</div></div>):<p>No deterministic observations were returned.</p>}{intelligenceResult.rule_engine.warnings?.length>0&&<><h4>Warnings</h4>{intelligenceResult.rule_engine.warnings.map((x,i)=><p className="report-warning" key={i}>{x}</p>)}</>}</div>}
       {intelligenceResult.weather&&<div className="report-section"><h4>Weather evidence</h4><div className="condition">{intelligenceResult.weather.conditions||'Conditions unavailable'} · {intelligenceResult.weather.temperature_c??'—'}°C · Humidity {intelligenceResult.weather.humidity_percent??'—'}%</div></div>}
       {intelligenceResult.satellite&&<div className="report-section"><h4>Satellite evidence</h4>{intelligenceResult.satellite.indices&&<div className="weather-cards"><div><small>NDVI</small><b>{intelligenceResult.satellite.indices.ndvi_mean??'—'}</b></div><div><small>EVI</small><b>{intelligenceResult.satellite.indices.evi_mean??'—'}</b></div><div><small>Images</small><b>{intelligenceResult.satellite.image_count??'—'}</b></div></div>}</div>}
@@ -357,17 +526,497 @@ function App(){
     </div>
    </div>}
 
-   {page==='assistant'&&<div className="chat-layout"><div className="chat-panel"><div className="chat-head"><div className="round-icon mint"><MessageCircle/></div><div><b> Farmer Assistant</b><small><i/> AI assistant · context-aware</small></div><span className="powered">GEMINI</span></div><div className="messages">{history.length===0&&<div className="welcome"><div className="welcome-icon"><Sprout size={25}/></div><h3>How can I help your farm today?</h3><p>Ask about crop care, soil readings, pests, or weather-related precautions.</p><div className="suggestions">{['How should I care for wheat at this stage?','What does my soil pH indicate?','What should I check before irrigation?'].map(q=><button onClick={()=>setQuestion(q)}>{q}<ArrowUpRight size={14}/></button>)}</div></div>}{history.map((m,i)=><div className={`bubble ${m.role}`}>{m.text}</div>)}{busy&&<div className="bubble assistant"><LoaderCircle className="spin" size={16}/> Thinking…</div>}</div><form className="chat-input" onSubmit={ask}><input value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Ask an agricultural question…"/><button disabled={busy||!question.trim()}><Send size={17}/></button></form><div className="chat-disclaimer">AI-generated information can be wrong. Verify high-impact decisions with a qualified local expert.</div></div><div className="side-context"><span className="mini-label">ACTIVE CONTEXT</span><h4>Your farm details</h4><div><small>LOCATION</small><b>{location}</b></div><div><small>PRIMARY CROP</small><b>{crop}</b></div><div><small>SOIL INPUTS</small><b>N {soil.nitrogen} · P {soil.phosphorus} · K {soil.potassium} · pH {soil.ph}</b></div><p>These details are sent with your question to make the response more relevant.</p></div></div>}
+   {page==='assistant'&&<div className="chat-layout"><div className="chat-panel"><div className="chat-head"><div className="round-icon mint"><MessageCircle/></div><div><b> Farmer Assistant</b><small><i/> AI assistant · context-aware</small></div><span className="powered"></span></div><div className="messages">{history.length===0&&<div className="welcome"><div className="welcome-icon"><Sprout size={25}/></div><h3>How can I help your farm today?</h3><p>Ask about crop care, soil readings, pests, or weather-related precautions.</p><div className="suggestions">{['How should I care for wheat at this stage?','What does my soil pH indicate?','What should I check before irrigation?'].map(q=><button onClick={()=>setQuestion(q)}>{q}<ArrowUpRight size={14}/></button>)}</div></div>}{history.map((m, i) => (
+  <div className={`bubble ${m.role}`} key={i}>
+    {m.role === 'assistant' ? (
+      <MarkdownReport text={m.text} />
+    ) : (
+      m.text
+    )}
+  </div>
+))}{busy&&<div className="bubble assistant"><LoaderCircle className="spin" size={16}/> Thinking…</div>}</div><form className="chat-input" onSubmit={ask}><input value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Ask an agricultural question…"/><button disabled={busy||!question.trim()}><Send size={17}/></button></form><div className="chat-disclaimer">AI-generated information can be wrong. Verify high-impact decisions with a qualified local expert.</div></div>
+
+<div className="side-context">
+  <div className="context-heading">
+    <div>
+      <span className="mini-label">FARM CONTEXT</span>
+      <h4>Current field profile</h4>
+    </div>
+    <Sprout size={21} className="context-sprout" />
+  </div>
+
+  <div className="context-location">
+    <MapPin size={16} />
+    <div>
+      <small>LOCATION</small>
+      <b title={location}>
+        {location || 'Location not selected'}
+      </b>
+    </div>
+  </div>
+
+  <div className="context-crop-row">
+    <div>
+      <small>CROP</small>
+      <b>{crop}</b>
+    </div>
+    <div>
+      <small>GROWTH STAGE</small>
+      <b>{growth}</b>
+    </div>
+  </div>
+
+  <div className="context-soil">
+    <div className="context-section-title">
+      <b>Soil readings</b>
+      <span>
+        {['nitrogen', 'phosphorus', 'potassium', 'ph']
+          .filter(k => soil[k] !== '' && soil[k] != null).length} of 4
+      </span>
+    </div>
+
+    <div className="context-soil-grid">
+      {[
+        ['N', 'Nitrogen', soil.nitrogen],
+        ['P', 'Phosphorus', soil.phosphorus],
+        ['K', 'Potassium', soil.potassium],
+        ['pH', 'Soil pH', soil.ph]
+      ].map(([symbol, label, value]) => (
+        <div className="context-soil-item" key={symbol}>
+          <span>{symbol}</span>
+          <div>
+            <small>{label}</small>
+            <b className={value !== '' && value != null ? 'provided' : 'missing'}>
+              {value !== '' && value != null ? value : '—'}
+            </b>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+
+  <p className="context-footnote">
+    <AlertCircle size={14} />
+    Only the information you provide is shared with the assistant.
+  </p>
+</div>
+
+
+  <div className="context-location">
+    <MapPin size={17} />
+    <div>
+      <small>LOCATION</small>
+      <b title={location}>{location || 'Not selected'}</b>
+    </div>
+  </div>
+
+  <div className="context-crop-row">
+    <div>
+      <small>PRIMARY CROP</small>
+      <b>{crop}</b>
+    </div>
+    <div>
+      <small>GROWTH STAGE</small>
+      <b>{growth}</b>
+    </div>
+  </div>
+
+  <div className="context-soil">
+    <div className="context-section-title">
+      <b>Soil measurements</b>
+      <span>
+        {['nitrogen', 'phosphorus', 'potassium', 'ph']
+          .filter(k => soil[k] !== '' && soil[k] != null).length}/4 provided
+      </span>
+    </div>
+
+    <div className="context-soil-grid">
+      {[
+        ['Nitrogen', soil.nitrogen],
+        ['Phosphorus', soil.phosphorus],
+        ['Potassium', soil.potassium],
+        ['pH', soil.ph]
+      ].map(([label, value]) => (
+        <div className="context-soil-item" key={label}>
+          <small>{label}</small>
+          <b className={value !== '' && value != null ? 'provided' : 'missing'}>
+            {value !== '' && value != null ? value : 'Not added'}
+          </b>
+        </div>
+      ))}
+    </div>
+  </div>
+
+  <div className="context-footnote">
+    <AlertCircle size={14} />
+    Only supplied measurements are shared with the assistant. Missing values are not assumed.
+  </div>
+</div>
+}
    <footer>Krishi Sahyog <span>·</span> Agricultural decision support prototype <span>·</span> Not a substitute for official agronomic advice</footer>
    </div></main>
  </div>
 }
-function Result({result,type}){
- if(!result)return <div className="result-empty"><div className="empty-art"><Sprout size={30}/></div><h3>Your results will appear here</h3><p>Complete the form and run the analysis to see your advisory.</p><div className="empty-points"><span><CheckCircle2 size={15}/> Clear inputs</span><span><CheckCircle2 size={15}/> Context-aware output</span><span><CheckCircle2 size={15}/> Source transparency</span></div></div>;
- return <div className="result-panel"><span className="mini-label">ANALYSIS RESULT</span><h3>{type==='disease'?'Leaf screening result':type==='soil'?'Soil health advisory':type==='satellite'?'Satellite vegetation analysis':'Weather & crop advisory'}</h3>{type==='disease'?<><div className="prediction"><span>TOP PREDICTION</span><b>{result.prediction}</b><small>Model confidence: {(result.confidence*100).toFixed(1)}%</small></div>{result.alternatives?.length>0&&<div className="alt-list"><b>Other model predictions</b>{result.alternatives.map(a=><div>{a.label}<span>{(a.confidence*100).toFixed(1)}%</span></div>)}</div>}<p className="disclaimer">{result.disclaimer}</p></>:type==='soil'?<><div className="result-text">
-  <AdvisoryText text={result.advisory} />
-</div><p className="source-note">Source: {result.source}</p></>:type==='satellite'?<><div className="weather-cards">{[['Mean NDVI',result.indices?.ndvi_mean,'',Leaf],['Mean EVI',result.indices?.evi_mean,'',Satellite],['Images found',result.image_count,'',CloudSun]].map(([l,v,u,I])=><div><I size={17}/><small>{l}</small><b>{v??'—'}{u}</b></div>)}</div><div className="condition">Latest image: {result.latest_image_date||'Not available'} · {result.source}</div><div className="source-note">Area: {result.area?.mode==='polygon'?'Field boundary polygon':'Circular buffer'} · Crop: {result.crop_context?.crop||crop} · Stage: {result.crop_context?.growth_stage||growth}</div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:'14px',marginTop:'16px'}}>{[['NDVI',result.previews?.ndvi],['EVI',result.previews?.evi]].map(([label,url])=><div><b style={{display:'block',marginBottom:'8px'}}>{label} preview</b>{url?<a href={url} target="_blank" rel="noreferrer"><img src={url} alt={`${label} satellite index preview`} style={{width:'100%',display:'block',borderRadius:'12px',border:'1px solid #dce5df'}}/></a>:<p>Preview unavailable</p>}</div>)}</div><div style={{marginTop:'18px'}}><b style={{fontSize:'13px'}}>Monthly vegetation trend</b><p className="fineprint">Each point is the mean index from that month's median Sentinel-2 composite over the selected area.</p>{result.timeseries?.length? <div style={{overflowX:'auto',marginTop:'10px'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:'10px'}}><thead><tr style={{textAlign:'left',color:'#819083',borderBottom:'1px solid #e8eee6'}}><th style={{padding:'9px 6px'}}>Month</th><th style={{padding:'9px 6px'}}>NDVI</th><th style={{padding:'9px 6px'}}>EVI</th><th style={{padding:'9px 6px'}}>Images</th></tr></thead><tbody>{result.timeseries.map(row=><tr key={row.month} style={{borderBottom:'1px solid #edf1eb'}}><td style={{padding:'9px 6px',color:'#526354'}}>{row.month}</td><td style={{padding:'9px 6px',fontWeight:700,color:'#47754b'}}>{row.ndvi_mean.toFixed(4)}</td><td style={{padding:'9px 6px',fontWeight:700,color:'#668c69'}}>{row.evi_mean.toFixed(4)}</td><td style={{padding:'9px 6px',color:'#7f8d80'}}>{row.image_count}</td></tr>)}</tbody></table></div>:<p className="fineprint">No monthly observations with valid pixels were available in this date range.</p>}</div><p className="fineprint">{result.crop_context?.note||'Vegetation indices are not a confirmed crop-health diagnosis. Compare trends with crop type, growth stage and field observations.'}</p><p className="source-note">Dataset: {result.collection} · {result.date_range?.start} to {result.date_range?.end}</p></>:<><div className="weather-cards">{[['Temperature',result.weather?.temperature_c,'°C',Sun],['Humidity',result.weather?.humidity_percent,'%',Droplets],['Wind',result.weather?.wind_speed_m_s,'m/s',Wind]].map(([l,v,u,I])=><div><I size={17}/><small>{l}</small><b>{v??'—'}{u}</b></div>)}</div><div className="condition">{result.weather?.city}: {result.weather?.conditions}</div><div className="result-text">
-  <AdvisoryText text={result.advisory} />
-</div></>}<div className="result-foot"><CheckCircle2 size={15}/> Generated for your submitted context</div></div>
+
+function interpretNDVI(value) {
+  if (value == null || !Number.isFinite(Number(value))) {
+    return 'No NDVI measurement available.';
+  }
+
+  const v = Number(value);
+
+  if (v < 0) {
+    return 'Negative value: generally associated with water, cloud, snow or non-vegetated surfaces.';
+  }
+  if (v < 0.2) {
+    return 'Very low vegetation signal. The area may contain bare soil or sparse vegetation.';
+  }
+  if (v < 0.4) {
+    return 'Low to moderate vegetation signal. Vegetation cover may be limited or developing.';
+  }
+  if (v < 0.6) {
+    return 'Moderate to strong vegetation signal, indicating noticeable green vegetation.';
+  }
+
+  return 'Strong green vegetation signal, generally associated with substantial green vegetation cover.';
 }
+
+
+function interpretEVI(value) {
+  if (value == null || !Number.isFinite(Number(value))) {
+    return 'No EVI measurement available.';
+  }
+
+  const v = Number(value);
+
+  if (v < 0) {
+    return 'Negative value: may indicate water, cloud or non-vegetated surfaces.';
+  }
+  if (v < 0.2) {
+    return 'Low vegetation signal. Green vegetation activity appears limited in the analysed pixels.';
+  }
+  if (v < 0.4) {
+    return 'Moderate vegetation signal. Vegetation development may be present.';
+  }
+  if (v < 0.6) {
+    return 'Moderate to strong vegetation signal in the selected field.';
+  }
+
+  return 'Strong vegetation signal. The analysed pixels show substantial vegetation activity.';
+}
+
+
+
+function Result({ result, type }) {
+  if (!result) {
+    return (
+      <div className="result-empty">
+        <div className="empty-art"><Sprout size={30} /></div>
+        <h3>Your results will appear here</h3>
+        <p>Complete the form and run the analysis to see your advisory.</p>
+        <div className="empty-points">
+          <span><CheckCircle2 size={15} /> Clear inputs</span>
+          <span><CheckCircle2 size={15} /> Context-aware output</span>
+          <span><CheckCircle2 size={15} /> Source transparency</span>
+        </div>
+      </div>
+    );
+  }
+
+  const ndvi = result.indices?.ndvi_mean;
+  const evi = result.indices?.evi_mean;
+
+  return (
+    <div className="result-panel">
+      <span className="mini-label">ANALYSIS RESULT</span>
+
+      <h3>
+        {type === 'disease'
+          ? 'Leaf screening result'
+          : type === 'soil'
+          ? 'Soil health advisory'
+          : type === 'satellite'
+          ? 'Satellite vegetation analysis'
+          : 'Weather & crop advisory'}
+      </h3>
+
+      {type === 'disease' ? (
+        <>
+          <div className="prediction">
+            <span>TOP PREDICTION</span>
+            <b>{result.prediction}</b>
+            <small>
+              Model confidence: {(result.confidence * 100).toFixed(1)}%
+            </small>
+          </div>
+
+          {result.alternatives?.length > 0 && (
+            <div className="alt-list">
+              <b>Other model predictions</b>
+              {result.alternatives.map((a, i) => (
+                <div key={i}>
+                  {a.label}
+                  <span>{(a.confidence * 100).toFixed(1)}%</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="disclaimer">{result.disclaimer}</p>
+        </>
+      ) : type === 'soil' ? (
+        <>
+          <div className="result-text">
+            <AdvisoryText text={result.advisory} />
+          </div>
+          <p className="source-note">Source: {result.source}</p>
+        </>
+      ) : type === 'satellite' ? (
+        <>
+          {/* Satellite summary metrics */}
+          <div className="weather-cards">
+            {[
+              ['Mean NDVI', ndvi, '', Leaf],
+              ['Mean EVI', evi, '', Satellite],
+              ['Images found', result.image_count, '', CloudSun]
+            ].map(([label, value, unit, Icon]) => (
+              <div key={label}>
+                <Icon size={17} />
+                <small>{label}</small>
+                <b>
+                  {value == null
+                    ? '—'
+                    : typeof value === 'number'
+                    ? value.toFixed(4)
+                    : value}
+                  {unit}
+                </b>
+              </div>
+            ))}
+          </div>
+
+          <div className="condition">
+            Latest image: {result.latest_image_date || 'Not available'}
+            {' · '}
+            {result.source}
+          </div>
+
+          <div className="source-note">
+            Area: {result.area?.mode === 'polygon'
+              ? 'Field boundary polygon'
+              : 'Circular buffer'}
+            {' · '}
+            Crop: {result.crop_context?.crop || 'Not specified'}
+            {' · '}
+            Stage: {result.crop_context?.growth_stage || 'Not specified'}
+          </div>
+
+          {/* NDVI and EVI preview images */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: '14px',
+              marginTop: '16px'
+            }}
+          >
+            {[
+              ['NDVI', result.previews?.ndvi],
+              ['EVI', result.previews?.evi]
+            ].map(([label, url]) => (
+              <div key={label}>
+                <b style={{ display: 'block', marginBottom: '8px' }}>
+                  {label} preview
+                </b>
+
+                {url ? (
+                  <a href={url} target="_blank" rel="noreferrer">
+                    <img
+                      src={url}
+                      alt={`${label} satellite index preview`}
+                      style={{
+                        width: '100%',
+                        display: 'block',
+                        borderRadius: '12px',
+                        border: '1px solid #dce5df'
+                      }}
+                    />
+                  </a>
+                ) : (
+                  <p>Preview unavailable</p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Explanation of vegetation indices */}
+          <div className="vegetation-guide" style={{
+            marginTop: '20px',
+            padding: '16px',
+            border: '1px solid #e2eae1',
+            borderRadius: '10px',
+            background: '#f8faf7'
+          }}>
+            <h4 style={{ marginTop: 0 }}>
+              Understanding your vegetation results
+            </h4>
+
+            <div style={{ marginBottom: '16px' }}>
+              <b>NDVI — Normalized Difference Vegetation Index</b>
+              <p>
+                NDVI measures the difference between near-infrared and red
+                light reflected by the Earth's surface. It is commonly used
+                to assess green vegetation cover and its relative vigour.
+              </p>
+              <b>
+                Your NDVI: {ndvi == null ? 'Not available' : Number(ndvi).toFixed(4)}
+              </b>
+              <p>
+                {interpretNDVI(ndvi)}
+              </p>
+            </div>
+
+            <div>
+              <b>EVI — Enhanced Vegetation Index</b>
+              <p>
+                EVI measures vegetation activity using near-infrared, red
+                and blue reflectance. It is designed to reduce some
+                atmospheric and background effects and can be more useful
+                in areas with dense vegetation.
+              </p>
+              <b>
+                Your EVI: {evi == null ? 'Not available' : Number(evi).toFixed(4)}
+              </b>
+              <p>
+                {interpretEVI(evi)}
+              </p>
+            </div>
+
+            <p className="fineprint">
+              Both indices are vegetation indicators, not direct measurements
+              of crop yield, plant health or nutrient deficiency. Interpret
+              them alongside crop type, growth stage, weather and field
+              observations.
+            </p>
+          </div>
+
+          {/* Monthly vegetation trend */}
+          <div style={{ marginTop: '18px' }}>
+            <b style={{ fontSize: '13px' }}>
+              Monthly vegetation trend
+            </b>
+
+            <p className="fineprint">
+              Each point is the mean index from that month's median
+              Sentinel-2 composite over the selected area.
+            </p>
+
+            {result.timeseries?.length ? (
+              <div style={{ overflowX: 'auto', marginTop: '10px' }}>
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  fontSize: '10px'
+                }}>
+                  <thead>
+                    <tr style={{
+                      textAlign: 'left',
+                      color: '#819083',
+                      borderBottom: '1px solid #e8eee6'
+                    }}>
+                      <th style={{ padding: '9px 6px' }}>Month</th>
+                      <th style={{ padding: '9px 6px' }}>NDVI</th>
+                      <th style={{ padding: '9px 6px' }}>EVI</th>
+                      <th style={{ padding: '9px 6px' }}>Images</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {result.timeseries.map(row => (
+                      <tr
+                        key={row.month}
+                        style={{ borderBottom: '1px solid #edf1eb' }}
+                      >
+                        <td style={{ padding: '9px 6px', color: '#526354' }}>
+                          {row.month}
+                        </td>
+                        <td style={{
+                          padding: '9px 6px',
+                          fontWeight: 700,
+                          color: '#47754b'
+                        }}>
+                          {row.ndvi_mean == null
+                            ? '—'
+                            : Number(row.ndvi_mean).toFixed(4)}
+                        </td>
+                        <td style={{
+                          padding: '9px 6px',
+                          fontWeight: 700,
+                          color: '#668c69'
+                        }}>
+                          {row.evi_mean == null
+                            ? '—'
+                            : Number(row.evi_mean).toFixed(4)}
+                        </td>
+                        <td style={{ padding: '9px 6px', color: '#7f8d80' }}>
+                          {row.image_count ?? '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="fineprint">
+                No monthly observations with valid pixels were available
+                in this date range.
+              </p>
+            )}
+          </div>
+
+          <p className="fineprint">
+            {result.crop_context?.note ||
+              'Vegetation indices are not a confirmed crop-health diagnosis. Compare trends with crop type, growth stage and field observations.'}
+          </p>
+
+          <p className="source-note">
+            Dataset: {result.collection}
+            {' · '}
+            {result.date_range?.start} to {result.date_range?.end}
+          </p>
+        </>
+      ) : (
+        <>
+          <div className="weather-cards">
+            {[
+              ['Temperature', result.weather?.temperature_c, '°C', Sun],
+              ['Humidity', result.weather?.humidity_percent, '%', Droplets],
+              ['Wind', result.weather?.wind_speed_m_s, 'm/s', Wind]
+            ].map(([label, value, unit, Icon]) => (
+              <div key={label}>
+                <Icon size={17} />
+                <small>{label}</small>
+                <b>{value ?? '—'}{unit}</b>
+              </div>
+            ))}
+          </div>
+
+          <div className="condition">
+            {result.weather?.city}: {result.weather?.conditions}
+          </div>
+
+          <div className="result-text">
+            <AdvisoryText text={result.advisory} />
+          </div>
+        </>
+      )}
+
+      <div className="result-foot">
+        <CheckCircle2 size={15} />
+        Generated for your submitted context
+      </div>
+    </div>
+  );
+}
+
 export default App;

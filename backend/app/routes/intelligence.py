@@ -8,7 +8,7 @@ from app.services.intelligence_service import analyze_intelligence
 
 router = APIRouter(
     prefix="/api/intelligence",
-    tags=["HAL Intelligence Core"]
+    tags=["KRISHI SAHYOG Intelligence Core"]
 )
 
 

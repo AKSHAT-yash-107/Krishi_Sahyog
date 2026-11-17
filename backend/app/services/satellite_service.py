@@ -16,30 +16,73 @@ def initialize_earth_engine():
         raise RuntimeError(f"Earth Engine initialization failed: {exc}") from exc
 
 
+
+def _normalize_geojson_geometry(geojson):
+    """Accept Polygon, MultiPolygon, Feature, or a single-feature FeatureCollection."""
+
+    if not isinstance(geojson, dict):
+        raise ValueError("Field boundary must be a GeoJSON object.")
+
+    geojson_type = geojson.get("type")
+
+    if geojson_type == "FeatureCollection":
+        features = geojson.get("features")
+
+        if not isinstance(features, list) or len(features) != 1:
+            raise ValueError(
+                "FeatureCollection must contain exactly one feature."
+            )
+
+        feature = features[0]
+
+        if not isinstance(feature, dict) or feature.get("type") != "Feature":
+            raise ValueError("Invalid Feature inside FeatureCollection.")
+
+        geojson = feature
+
+    if geojson.get("type") == "Feature":
+        geojson = geojson.get("geometry")
+
+    if not isinstance(geojson, dict):
+        raise ValueError("GeoJSON geometry is missing or invalid.")
+
+    if geojson.get("type") not in ("Polygon", "MultiPolygon"):
+        raise ValueError(
+            "Field boundary must contain a Polygon or MultiPolygon geometry."
+        )
+
+    return geojson
+
+
 def _make_region(latitude, longitude, radius_m, polygon_geojson=None):
     if polygon_geojson:
-        if not isinstance(polygon_geojson, dict):
-            raise ValueError("Field boundary must be a GeoJSON object.")
-        geometry_type = polygon_geojson.get("type")
-        if geometry_type not in ("Polygon", "MultiPolygon"):
-            raise ValueError("Field boundary GeoJSON must be Polygon or MultiPolygon.")
+        polygon_geojson = _normalize_geojson_geometry(polygon_geojson)
+
         try:
             region = ee.Geometry(polygon_geojson)
-            # Force basic server-side geometry validation now, not during a later request.
             region.area(maxError=1).getInfo()
             return region, "polygon"
         except Exception as exc:
-            raise ValueError(f"Invalid field boundary GeoJSON: {exc}") from exc
+            raise ValueError(
+                f"Invalid field boundary GeoJSON: {exc}"
+            ) from exc
 
     if latitude is None or longitude is None:
-        raise ValueError("Latitude and longitude are required when no polygon is supplied.")
+        raise ValueError(
+            "Latitude and longitude are required when no polygon is supplied."
+        )
+
     if not -90 <= latitude <= 90:
         raise ValueError("Latitude must be between -90 and 90.")
+
     if not -180 <= longitude <= 180:
         raise ValueError("Longitude must be between -180 and 180.")
+
     if not 100 <= radius_m <= 5000:
         raise ValueError("Radius must be between 100 and 5000 metres.")
+
     return ee.Geometry.Point([longitude, latitude]).buffer(radius_m), "circle"
+
 
 
 def _prepare_image(image):
@@ -138,7 +181,15 @@ def analyze_satellite(
         raise ValueError("Date range cannot exceed 24 months.")
 
     initialize_earth_engine()
-    region, area_mode = _make_region(latitude, longitude, radius_m, polygon_geojson)
+    if polygon_geojson:
+     polygon_geojson = _normalize_geojson_geometry(polygon_geojson)
+
+    region, area_mode = _make_region(
+    latitude,
+    longitude,
+    radius_m,
+    polygon_geojson
+)
 
     collection = (
         ee.ImageCollection(COLLECTION)

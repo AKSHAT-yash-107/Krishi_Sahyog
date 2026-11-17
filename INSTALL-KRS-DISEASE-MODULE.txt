@@ -1,0 +1,35 @@
+KRS LOCAL DISEASE DETECTOR — INSTALLATION
+
+1. Extract this ZIP into your existing HAL-Lite project root.
+   Allow files to merge. It adds:
+   - backend/training/train_disease_model.py
+   - backend/training/README.md
+   - backend/app/services/disease_service.py (replaces hosted Hugging Face call)
+   - backend/requirements-ml.txt
+
+2. Open PowerShell in the backend folder:
+   cd path\to\HAL-Lite\backend
+
+3. Activate your existing virtual environment:
+   .\.venv\Scripts\Activate.ps1
+
+4. Install ML dependencies:
+   pip install -r requirements-ml.txt
+
+5. Train the first model:
+   python training\train_disease_model.py --max-per-class 120 --test-per-class 60 --epochs 2
+
+6. Wait until the script says Training complete and shows the model saved path.
+
+7. Start backend:
+   uvicorn app.main:app --reload --port 8000
+
+8. Test POST /api/disease/classify in http://localhost:8000/docs,
+   then test the existing HAL frontend.
+
+Important:
+- First dataset/model download requires internet and several GB free disk.
+- Training speed depends on CPU/GPU. If training takes too long, let it continue;
+  do not close the terminal.
+- The classifier is trained on PlantVillage and is a screening aid, not a clinical
+  or agronomic diagnosis.

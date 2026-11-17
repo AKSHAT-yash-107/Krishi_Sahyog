@@ -11,8 +11,12 @@ import os
 load_dotenv()
 from app.routes import disease, soil, weather, assistant
 
-app = FastAPI(title="HAL Lite API", version="1.0.0",
-              description="Context-aware agricultural advisory demo")
+app = FastAPI(
+    title="Krishi Sahyog API",
+    version="1.0.0",
+    description="Agricultural decision support and field intelligence"
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -27,7 +31,11 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "HAL Lite API"}
+    return {
+        "status": "ok",
+        "service": "Krishi Sahyog API"
+    }
+
 
 app.include_router(disease.router, prefix="/api/disease", tags=["Disease"])
 app.include_router(soil.router, prefix="/api/soil", tags=["Soil"])

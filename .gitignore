@@ -63,3 +63,57 @@ Thumbs.db
 
 # Logs
 *.log
+# Python environments
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+.env.*
+
+# Frontend
+node_modules/
+dist/
+
+# Backups
+*.backup
+*.backup.*
+*.bak
+*backup*.css
+*backup*.py
+
+# Large archives
+*.zip
+
+# Local database
+*.sqlite3
+*.db
+# Python environments
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+.env.*
+
+# Frontend
+node_modules/
+dist/
+
+# Backups
+*backup*
+*.bak
+
+# Archives
+*.zip
+
+# Local databases
+*.sqlite3
+*.db
+
+# Experimental model not used by current service
+backend/models/trained_plant_disease_model.keras
